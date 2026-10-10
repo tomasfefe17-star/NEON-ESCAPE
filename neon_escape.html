@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON ESCAPE — Mini Game</title>
+<style>
+:root{--cyan:#66f7ff;--pink:#ff4fd8;--bg:#070914}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 50% 0%,#17204a 0%,#070914 55%);color:#eef5ff;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;min-height:100vh;display:grid;place-items:center;padding:20px}
+.wrap{width:min(940px,100%)}
+.top{display:flex;justify-content:space-between;align-items:end;gap:15px;margin-bottom:14px;flex-wrap:wrap}
+.kicker{color:var(--cyan);font-size:11px;letter-spacing:4px;font-weight:800}
+h1{margin:4px 0 0;font-size:clamp(30px,6vw,52px);letter-spacing:-2px;line-height:1}
+h1 span{color:var(--pink);text-shadow:0 0 24px #ff4fd866}
+.sub{color:#9aa8c9;font-size:13px;margin-top:8px}
+.hud{display:flex;gap:8px}
+.pill{border:1px solid #293354;background:#0b1022cc;padding:10px 14px;border-radius:12px;min-width:85px}
+.pill small{display:block;color:#8998bc;font-size:10px;letter-spacing:1.5px}
+.pill b{font-size:20px}
+.frame{position:relative;border:1px solid #303b61;border-radius:18px;overflow:hidden;box-shadow:0 0 70px #314cff1c,0 25px 80px #0008;background:#050711}
+canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;touch-action:none}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;background:#050711c9;backdrop-filter:blur(7px);padding:22px;text-align:center}
+.panel{max-width:480px}
+.badge{display:inline-block;border:1px solid #ff4fd877;color:var(--pink);border-radius:99px;padding:7px 12px;font-size:10px;letter-spacing:2px;font-weight:900}
+.panel h2{font-size:clamp(30px,5vw,48px);margin:16px 0 8px;letter-spacing:-1.8px}
+.panel p{color:#b3bfdc;line-height:1.6;font-size:14px}
+button{border:0;border-radius:11px;background:linear-gradient(100deg,var(--cyan),#a6fff4);color:#071018;font-weight:900;letter-spacing:1px;padding:14px 23px;cursor:pointer;box-shadow:0 0 28px #66f7ff30}
+button:hover{transform:translateY(-1px);filter:brightness(1.08)}
+.controls{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;color:#8e9cbd;font-size:12px;flex-wrap:wrap}
+.keys{display:flex;gap:5px;align-items:center}
+kbd{border:1px solid #303b61;background:#11172b;color:#dce7ff;padding:5px 8px;border-radius:6px;font-size:11px}
+.mobile{display:none;gap:8px}
+.mobile button{padding:12px 15px;min-width:48px}
+@media(max-width:620px){.mobile{display:flex}.controls .hint{display:none}.pill{min-width:70px;padding:8px 10px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><div class="kicker">ARCADE EXPERIMENT 001</div><h1>NEON <span>ESCAPE</span></h1><div class="sub">Sobrevive. Recolhe energia. Não toques nos drones.</div></div>
+    <div class="hud">
+      <div class="pill"><small>PONTOS</small><b id="score">0000</b></div>
+      <div class="pill"><small>VIDAS</small><b id="lives">♥ ♥ ♥</b></div>
+      <div class="pill"><small>NÍVEL</small><b id="level">01</b></div>
+    </div>
+  </div>
+  <div class="frame">
+    <canvas id="game" width="960" height="540" aria-label="Jogo Neon Escape"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="panel">
+        <div class="badge">MINI GAME • FEITO PARA TI</div>
+        <h2 id="headline">ESCAPA À <span style="color:var(--cyan)">MATRIX.</span></h2>
+        <p id="message">És o último runner da cidade. Apanha os núcleos de energia cianos, evita os drones cor-de-rosa e tenta sobreviver o máximo possível.</p>
+        <button id="start">INICIAR MISSÃO ↗</button>
+      </div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="hint">MOVIMENTO <span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ou <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span> · PAUSA <kbd>ESC</kbd></div>
+    <div class="mobile"><button data-dir="up">↑</button><button data-dir="left">←</button><button data-dir="down">↓</button><button data-dir="right">→</button></div>
+    <div>TIP: mantém-te em movimento ⚡</div>
+  </div>
+</div>
+<script>
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const W=canvas.width,H=canvas.height;
+const $=id=>document.getElementById(id);
+let running=false,paused=false,score=0,lives=3,level=1,frame=0,keys={},player,orbs=[],drones=[],particles=[],lastSpawn=0,invuln=0;
+function rand(a,b){return Math.random()*(b-a)+a}
+function reset(){score=0;lives=3;level=1;frame=0;lastSpawn=0;invuln=0;player={x:W/2,y:H/2,r:12,speed:4.2};orbs=[];drones=[];particles=[];for(let i=0;i<5;i++)spawnOrb();for(let i=0;i<3;i++)spawnDrone();updateHud()}
+function spawnOrb(){orbs.push({x:rand(35,W-35),y:rand(35,H-35),r:7,p:rand(0,6.28)})}
+function spawnDrone(){let edge=Math.floor(rand(0,4)),x=edge===0?0:edge===1?W:rand(0,W),y=edge===2?0:edge===3?H:rand(0,H);drones.push({x,y,r:rand(10,15),speed:rand(1.05,1.6)+level*.14,phase:rand(0,6.28)})}
+function burst(x,y,color,n=12){for(let i=0;i<n;i++){let a=rand(0,Math.PI*2),s=rand(1,4);particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rand(18,35),color})}}
+function updateHud(){$('score').textContent=String(score).padStart(4,'0');$('lives').textContent='♥ '.repeat(lives).trim()||'—';$('level').textContent=String(level).padStart(2,'0')}
+function start(){reset();running=true;paused=false;$('overlay').style.display='none';}
+$('start').addEventListener('click',start);
+function endGame(){running=false;$('overlay').style.display='grid';$('headline').innerHTML='FIM DE <span style="color:var(--pink)">JOGO.</span>';$('message').textContent=`Conseguiste ${score} pontos e chegaste ao nível ${level}. Outra tentativa? A cidade não se vai salvar sozinha.`;$('start').textContent='TENTAR OUTRA VEZ ↗'}
+function togglePause(){if(!running)return;paused=!paused;if(paused){$('overlay').style.display='grid';$('headline').textContent='PAUSA';$('message').textContent='Respira. Os drones também estão à espera.';$('start').textContent='CONTINUAR ↗';$('start').onclick=()=>{paused=false;$('overlay').style.display='none';$('start').onclick=start;};}else $('overlay').style.display='none'}
+window.addEventListener('keydown',e=>{let k=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();keys[k]=true;if(k==='escape')togglePause()});
+window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+document.querySelectorAll('[data-dir]').forEach(b=>{const dir=b.dataset.dir;const key={up:'arrowup',down:'arrowdown',left:'arrowleft',right:'arrowright'}[dir];b.addEventListener('pointerdown',e=>{e.preventDefault();keys[key]=true});['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>keys[key]=false))});
+function drawGrid(){ctx.strokeStyle='#151d39';ctx.lineWidth=1;for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}ctx.strokeStyle='#27335a';ctx.strokeRect(14,14,W-28,H-28)}
+function glowCircle(x,y,r,color){ctx.save();ctx.shadowBlur=22;ctx.shadowColor=color;ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.restore()}
+function tick(){
+ requestAnimationFrame(tick);frame++;
+ ctx.clearRect(0,0,W,H);
+ const bg=ctx.createRadialGradient(W/2,H/2,20,W/2,H/2,650);bg.addColorStop(0,'#0d1730');bg.addColorStop(1,'#050711');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);drawGrid();
+ if(running&&!paused){
+  let dx=0,dy=0;if(keys['arrowleft']||keys.a)dx--;if(keys['arrowright']||keys.d)dx++;if(keys['arrowup']||keys.w)dy--;if(keys['arrowdown']||keys.s)dy++;
+  if(dx&&dy){dx*=.707;dy*=.707}player.x=Math.max(28,Math.min(W-28,player.x+dx*player.speed));player.y=Math.max(28,Math.min(H-28,player.y+dy*player.speed));
+  if(++lastSpawn>Math.max(65,150-level*12)){spawnDrone();lastSpawn=0}
+  orbs.forEach((o,i)=>{o.p+=.04;if(Math.hypot(player.x-o.x,player.y-o.y)<player.r+o.r+2){score+=10;burst(o.x,o.y,'#66f7ff',14);orbs.splice(i,1);spawnOrb();if(score>0&&score%(100)===0){level++;player.speed=Math.min(6,player.speed+.12);spawnDrone()}updateHud()}});
+  drones.forEach((d,i)=>{let a=Math.atan2(player.y-d.y,player.x-d.x);d.x+=Math.cos(a)*d.speed;d.y+=Math.sin(a)*d.speed;d.phase+=.08;if(Math.hypot(player.x-d.x,player.y-d.y)<player.r+d.r){if(invuln<=0){lives--;invuln=90;burst(player.x,player.y,'#ff4fd8',24);updateHud();if(lives<=0)endGame()}d.x-=Math.cos(a)*8;d.y-=Math.sin(a)*8}});
+  if(invuln>0)invuln--;
+  score+=0.025; if(frame%20===0)updateHud();
+  particles.forEach((p,i)=>{p.x+=p.vx;p.y+=p.vy;p.life--;p.vx*=.98;p.vy*=.98;if(p.life<=0)particles.splice(i,1)});
+ }
+ orbs.forEach(o=>{ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.p);ctx.strokeStyle='#66f7ff';ctx.lineWidth=2;ctx.shadowBlur=20;ctx.shadowColor='#66f7ff';ctx.strokeRect(-o.r,-o.r,o.r*2,o.r*2);ctx.restore();glowCircle(o.x,o.y,2,'#eaffff')});
+ drones.forEach(d=>{ctx.save();ctx.translate(d.x,d.y);ctx.rotate(frame*.025+d.phase);ctx.shadowBlur=22;ctx.shadowColor='#ff4fd8';ctx.strokeStyle='#ff4fd8';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-d.r);ctx.lineTo(d.r,d.r);ctx.lineTo(-d.r,d.r);ctx.closePath();ctx.stroke();ctx.restore();glowCircle(d.x,d.y,3,'#ffb5f0')});
+ particles.forEach(p=>{ctx.globalAlpha=Math.max(0,p.life/35);glowCircle(p.x,p.y,2,p.color);ctx.globalAlpha=1});
+ if(player){if(invuln>0&&Math.floor(frame/5)%2===0){}else{ctx.save();ctx.translate(player.x,player.y);ctx.rotate(Math.sin(frame*.08)*.08);ctx.shadowBlur=28;ctx.shadowColor='#66f7ff';ctx.strokeStyle='#dfffff';ctx.lineWidth=2;ctx.fillStyle='#66f7ff';ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(12,10);ctx.lineTo(0,6);ctx.lineTo(-12,10);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore()}}
+ if(!running){ctx.fillStyle='#66f7ff';ctx.font='12px monospace';ctx.fillText('NEON GRID // READY',28,H-24)}
+}
+tick();
+</script>
+</body>
+</html>
